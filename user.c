@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
 	                ioctl(fd,LWFW_DEACTIVATE);  
 	                break;  
 	            case 'g':  
-	                system("dmesg | grep firewall:|sed -n 's/fire//pg' > log.txt");  
+	                system("dmesg | grep firewall:|sed 's/\\[.*\\]//'|sed 's/firewall://' > log.txt");  
 	                break;  
 	            case 'r':  
 	                //ioctl(fd,LWFW_REFRESH,optarg);  

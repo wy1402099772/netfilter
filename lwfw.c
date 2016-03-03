@@ -349,7 +349,7 @@ unsigned int lwfw_hookfn(const struct nf_hook_ops *ops,
 			printk("firewall:because of the %d rule\n", i);
 			printk("firewall:");
 			printRule(i);
-			printk("\n");
+			printk("firewall:   \n");
 
 			if(strcmp(ruleArray[i].action, "ACCEPT") == 0)
     			return NF_ACCEPT;
