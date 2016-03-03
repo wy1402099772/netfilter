@@ -29,6 +29,7 @@
 #include <asm/unistd.h>  
 #include <linux/if_arp.h>  
 #include <linux/cdev.h>           // struct cdev  
+#include <linux/timekeeping.h>
   
 #include "lwfw.h"  
 
@@ -190,7 +191,7 @@ void addNewRule(char *str)
 
 void printRule(int i)
 {
-	printk("%s, %d, %s, %d, %s, %d\n", ruleArray[i].srcIP, ruleArray[i].srcPort, ruleArray[i].destIP, ruleArray[i].destPort, ruleArray[i].protocol, ruleArray[i].time);
+	printk("rule %d:%s, %d, %s, %d, %s, %d\n", i, ruleArray[i].srcIP, ruleArray[i].srcPort, ruleArray[i].destIP, ruleArray[i].destPort, ruleArray[i].protocol, ruleArray[i].time);
 }
 	  
 /* 
@@ -255,6 +256,11 @@ unsigned int lwfw_hookfn(const struct nf_hook_ops *ops,
     else
         printk("Other Protocol \n");
 	  
+    struct timeval currentTime;
+    do_gettimeofday(&currentTime);		
+    long int second = currentTime.tv_sec;
+    int currentMinute = second/60 % 60;
+
     // printk("sourceIP:         ");
     // printk("%pI4\n", &(ip->saddr));
     // printk("destinationIP:    ");
@@ -307,6 +313,8 @@ unsigned int lwfw_hookfn(const struct nf_hook_ops *ops,
     	if(ruleArray[i].time != -1)
     	{
     		needConfirmRuleCount++;
+    		if(currentMinute == ruleArray[i].time)
+    			confirmedRuleCount++;
     	}
     	
     	if(confirmedRuleCount > 0 && confirmedRuleCount == needConfirmRuleCount)
