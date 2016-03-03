@@ -56,6 +56,7 @@ struct rule
 	int srcPort;
 	char protocol[8];
 	unsigned int time;
+	char action[8];
 	/* data */
 };
   

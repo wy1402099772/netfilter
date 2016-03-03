@@ -133,10 +133,10 @@ int atoi(char *str)
 
 void addNewRule(char *str)
 {
-	char tmpStore[6][20];
+	char tmpStore[7][20];
 	int i = 0, j = 1;
 	int k = 0;
-	for(; i < 6 && str[j] != '\0'; j++)
+	for(; i < 7 && str[j] != '\0'; j++)
 	{
 		if(str[j] == '#')
 		{
@@ -182,6 +182,12 @@ void addNewRule(char *str)
 	}
 	else
 		ruleArray[indicator].time = -1;
+	if(tmpStore[6][0] != '\0')
+	{
+		strcpy(ruleArray[indicator].action, tmpStore[6]);
+	}
+	else
+		strcpy(ruleArray[indicator].action, "ACCEPT");
 	
 	ruleArray[indicator].enable = 1;
 	indicator++;
@@ -191,7 +197,7 @@ void addNewRule(char *str)
 
 void printRule(int i)
 {
-	printk("rule %d:%s, %d, %s, %d, %s, %d\n", i, ruleArray[i].srcIP, ruleArray[i].srcPort, ruleArray[i].destIP, ruleArray[i].destPort, ruleArray[i].protocol, ruleArray[i].time);
+	printk("rule %d:%s, %d, %s, %d, %s, %d, %s\n", i, ruleArray[i].srcIP, ruleArray[i].srcPort, ruleArray[i].destIP, ruleArray[i].destPort, ruleArray[i].protocol, ruleArray[i].time,ruleArray[i].action);
 }
 	  
 /* 
@@ -201,8 +207,18 @@ unsigned int lwfw_hookfn(const struct nf_hook_ops *ops,
                    struct sk_buff *skb,
                    const struct nf_hook_state *state)
 { 
+	if(state->hook 	!= 1 && state->hook != 3)
+		return NF_ACCEPT;
 	//printk("Start hook Status: %u\n", state->hook);
-	struct sk_buff *sk = skb_copy(skb, 1);  
+	// if(!skb)
+	// {
+	// 	printk("skb == NULL\n");
+	// }
+	// else
+	// {
+	// 	printk("skb != NULL\n");
+	// }
+	struct sk_buff *sk = skb;//= skb_copy(skb, 1);  
     struct iphdr *ip;  
     struct tcphdr *tcph = NULL;
     struct udphdr *udph = NULL;
@@ -215,7 +231,10 @@ unsigned int lwfw_hookfn(const struct nf_hook_ops *ops,
     protocol[0] = '\0';
 
     if(!sk)  
-	      return NF_ACCEPT; 
+	{
+		printk("sk == NULL, accept\n");
+		return NF_ACCEPT;
+	} 
 
 
 	ip = ip_hdr(sk);  
@@ -267,6 +286,7 @@ unsigned int lwfw_hookfn(const struct nf_hook_ops *ops,
     // printk("%pI4\n", &(ip->daddr)); 
 
 	//return NF_ACCEPT;
+	lwfw_statistics.total_seen++;
     int i = 0;
     int confirmedRuleCount = 0;
     int needConfirmRuleCount = 0;
@@ -319,11 +339,21 @@ unsigned int lwfw_hookfn(const struct nf_hook_ops *ops,
     	
     	if(confirmedRuleCount > 0 && confirmedRuleCount == needConfirmRuleCount)
     	{
-    		printk("Drop :	sourceIP: %pI4 (%d)\n", &(ip->saddr), srcPort);
+    		if(strcmp(ruleArray[i].action, "ACCEPT") == 0)
+    			printk("ACCEPT");
+    		else
+    			printk("DROP");
+    		printk("	sourceIP: %pI4 (%d)\n", &(ip->saddr), srcPort);
 			printk("		destinationIP: %pI4 (%d)\n", &(ip->daddr), destPort);
 			printk("protocol: %s, hook state:%d\n", protocol, state->hook);
 			printk("because of the %d rule\n", i);
-			return NF_DROP;
+			printk("\n");
+
+			if(strcmp(ruleArray[i].action, "ACCEPT") == 0)
+    			return NF_ACCEPT;
+    		else
+    			return NF_DROP;
+
     	}
 
     }
@@ -335,6 +365,14 @@ unsigned int lwfw_hookfn(const struct nf_hook_ops *ops,
 	
 	return NF_ACCEPT;               /* We are happy to keep the packet */  
 }  
+
+void clearStatInfo(void)
+{
+	lwfw_statistics.total_seen = 0;
+	lwfw_statistics.tcp_dropped = 0;
+	lwfw_statistics.total_dropped = 0;
+	lwfw_statistics.ip_dropped = 0;
+}
 	  
 /* Function to copy the LWFW statistics to a userspace buffer */  
 static int copy_stats(struct lwfw_stats *statbuff)  
@@ -368,6 +406,7 @@ static long lwfw_ioctl( struct file *file, unsigned int cmd, unsigned long arg)
 	    	case LWFW_DEACTIVATE: {  
 	       		//active ^= active;  
 	       		clearRuleArray();
+	       		clearStatInfo();
 	           	//printk("LWFW: Deactivated.\n");  
 	       		break;  
 	    	}  

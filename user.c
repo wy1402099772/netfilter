@@ -33,7 +33,7 @@ int checkRule(char *str)
 		if(str[i] == '#')
 			count++;
 	}
-	if(7 == count)
+	if(8 == count)
 		return 1;
 	else
 		return 0;
