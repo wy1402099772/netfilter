@@ -8,7 +8,11 @@
 
 #include "lwfw.h"  
   
-char* const short_options = "adgr";
+char* const short_options = "adgrpic";
+char ruleStore[200][81];
+int fd;
+int indicator;
+
 
 void removeEnterCharater(char *str)
 {
@@ -30,7 +34,7 @@ int checkRule(char *str)
 	int count = 0;
 	for(; str[i] != '\0'; i++)
 	{
-		if(str[i] == '#')
+		if(str[i] == '@')
 			count++;
 	}
 	if(8 == count)
@@ -39,18 +43,113 @@ int checkRule(char *str)
 		return 0;
 }
 
+void loadRule(void)
+{
+	FILE *fp;
+    char str[81];
+    indicator = 0;
+    
+	if((fp=fopen("./rule.dat","rt")) == NULL)
+    {
+        printf("\nCannot open file strike any key exit!\n");
+        exit(1);
+    }
+
+    for(fgets(str, 81, fp); !feof(fp); fgets(str, 81, fp))
+    {
+    	removeEnterCharater(str);
+    	if(checkRule(str))
+    	{
+    		strcpy(ruleStore[indicator++], str);
+    		//printf("%s\n", str);
+    	}
+    }
+    fclose(fp);
+}
+
+void writeRule(void)
+{
+	FILE *fp;
+	if((fp=fopen("./rule.dat","w")) == NULL)
+    {
+        printf("\nCannot open file strike any key exit!\n");
+        exit(1);
+    }
+    printf("open success\n");
+	int i = 0;
+	for( ; i < indicator; i++)
+	{
+		fputs(ruleStore[i], fp);
+		fputc('\n', fp);
+	}
+	fclose(fp);
+	return ;
+}
+
+void refreshRule(void)
+{
+	loadRule();
+	ioctl(fd,LWFW_DEACTIVATE); 
+    int i = 0;
+	for(i = 0; i < indicator; i++)
+		ioctl(fd,LWFW_REFRESH,ruleStore[i]);
+}
+
+
+void printRule(void)
+{
+	loadRule();
+	int i = 0;
+	//printf("indicator:%d", indicator);
+	for(i ; i < indicator; i++)
+		printf("rule %d:%s\n", i, ruleStore[i]);
+	return ;
+}
+
+void insertRule(int row, char *str)
+{
+	loadRule();
+	if(row > indicator)
+		row = indicator;
+	else if(row < 0)
+		row = 0;
+	int i;
+	indicator++;
+	for(i = indicator - 1; i > row; i--)
+		strcpy(ruleStore[i], ruleStore[i-1]);
+	strcpy(ruleStore[row], str);
+	writeRule();
+}
+
+void cancelRule(int row)
+{
+	loadRule();
+	if(row >= indicator || row < 0)
+	{
+		printf("arguement is too large or too small\n");
+		return;
+	}
+	for(row++; row < indicator; row++)
+		strcpy(ruleStore[row-1], ruleStore[row]);
+	indicator--;
+	writeRule();
+}
+
 struct option long_options[] = {  
 	{ "active"  , 0, NULL, 'a' },  
 	{ "deactive"    , 0, NULL, 'd' },  
 	{ "getstatus"   , 0, NULL, 'g' },  
 	{ "refresh"  , 0, NULL, 'r' },  
+	{ "print"  , 0, NULL, 'p' }, 
+	{ "insert", 0, NULL, 'i'},
+	{ "cancel", 0, NULL, 'c'},
 	{ 0     , 0, NULL,  0  },  
 };   
 	  
 int main(int argc, char *argv[])  
 {  
 	int c;   
-	int fd;  
+	  
 	struct lwfw_stats status;  
 	fd = open("/dev/lwfw",O_RDWR);  
 	if(fd == -1 ){  
@@ -65,6 +164,7 @@ int main(int argc, char *argv[])
 	if(c = argv[1][0])  
 	{ 
 		switch(c){  
+				int row = 0;
 				FILE *fp;
     			char str[81];
     			char count = 0;
@@ -75,42 +175,45 @@ int main(int argc, char *argv[])
 	                ioctl(fd,LWFW_DEACTIVATE);  
 	                break;  
 	            case 'g':  
-	                ioctl(fd,LWFW_GET_STATS,status);  
-	                printf("if_dropped is %x\n",status.if_dropped);  
-	                printf("ip_dropped is %x\n",status.ip_dropped);  
-	                printf("tcp_dropped is %x\n",status.tcp_dropped);  
-	                printf("total_dropped is %lu\n",status.total_dropped);  
-	                printf("total_seen is %lu\n",status.total_seen);  
+	                system("dmesg | grep firewall:|sed -n 's/fire//pg' > log.txt");  
 	                break;  
 	            case 'r':  
 	                //ioctl(fd,LWFW_REFRESH,optarg);  
 	                // printf("optarg is %s\n",optarg); 
-	            	ioctl(fd,LWFW_DEACTIVATE); 
-	     			printf("load rule, count:%d\n", count);
-    				if((fp=fopen("./rule.dat","rt")) == NULL)
-    				{
-        				printf("\nCannot open file strike any key exit!\n");
-        				exit(1);
-    				}
-    				for(fgets(str, 81, fp); !feof(fp); fgets(str, 81, fp))
-    				{
-    					removeEnterCharater(str);
-    					if(str == strpbrk(str, "//"))
-    					{
-    						printf("the %d rule has been ignored\n", count++);
-    					}
-    					else if(checkRule(str))
-    					{
-    						printf("%s, the %d rule has been loaded\n", str, count++);
-    						ioctl(fd,LWFW_REFRESH,str);
-    					}
-    					else
-    					{
-    						printf("the %d rule is not right\n", count++);
-    					}
-    				}
-    				fclose(fp); 
-	                break;   
+	            	refreshRule();
+	                break; 
+	            case 'p':
+	            	//printf("reach p\n");
+	            	printRule();
+	            	break;
+	            case 'i':
+	            	printf("%s\n", argv[3]);
+	            	if(argc == 4)
+	            	{
+	            		row = atoi(argv[2]);
+	            		if(checkRule(argv[3]))
+	            		{
+	            			insertRule(row, argv[3]);
+	            			refreshRule();
+	            		}
+	            		else
+	            			printf("rule input error\n");
+	            	}
+	            	else
+	            	{
+	            		printf("arguement error\n");
+	            	}
+	            	break;
+	            case 'c':
+	            	if(argc == 3)
+	            	{
+	            		row = atoi(argv[2]);
+	            		cancelRule(row);
+	            		refreshRule();
+	            	}
+	            	else
+	            		printf("arguement error\n");
+	            	break;  
 	            default:  
 	                printf("sadf\n");     
 	        }  
